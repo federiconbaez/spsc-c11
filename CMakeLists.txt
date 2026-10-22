@@ -23,3 +23,8 @@ endif()
 
 add_compile_options(-Wall -Wextra -Wpedantic -Wconversion -Werror)
 
+enable_testing()
+add_executable(test_spsc tests/test_spsc.c)
+target_link_libraries(test_spsc PRIVATE spsc Threads::Threads)
+add_test(NAME spsc COMMAND test_spsc ${SPSC_STRESS_ITEMS})
+
