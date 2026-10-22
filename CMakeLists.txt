@@ -28,3 +28,14 @@ add_executable(test_spsc tests/test_spsc.c)
 target_link_libraries(test_spsc PRIVATE spsc Threads::Threads)
 add_test(NAME spsc COMMAND test_spsc ${SPSC_STRESS_ITEMS})
 
+# Negative control: with relaxed handoff the stress test must trip ThreadSanitizer.
+if(SPSC_SANITIZER STREQUAL "thread")
+  add_executable(test_spsc_relaxed tests/test_spsc.c)
+  target_compile_definitions(test_spsc_relaxed PRIVATE SPSC_ACQUIRE=memory_order_relaxed SPSC_RELEASE=memory_order_relaxed)
+  target_link_libraries(test_spsc_relaxed PRIVATE spsc Threads::Threads)
+  add_test(NAME tsan_catches_relaxed_ordering COMMAND test_spsc_relaxed 200000)
+  set_tests_properties(tsan_catches_relaxed_ordering PROPERTIES
+    ENVIRONMENT "TSAN_OPTIONS=halt_on_error=1"
+    PASS_REGULAR_EXPRESSION "WARNING: ThreadSanitizer: data race")
+endif()
+

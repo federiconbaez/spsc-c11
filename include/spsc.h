@@ -27,6 +27,15 @@
 #define SPSC_CACHELINE 64
 #endif
 
+/* Orderings used for the cross-thread index handoff. Overridable only so the
+ * test suite can prove that ThreadSanitizer catches a relaxed (broken) build. */
+#ifndef SPSC_ACQUIRE
+#define SPSC_ACQUIRE memory_order_acquire
+#endif
+#ifndef SPSC_RELEASE
+#define SPSC_RELEASE memory_order_release
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -76,7 +85,7 @@ static inline size_t spsc_push_n(spsc_ring *r, const void *src, size_t n) {
     const size_t cap = r->mask + 1;
     size_t free_slots = cap - (head - r->cached_tail);
     if (free_slots < n) {
-        r->cached_tail = atomic_load_explicit(&r->tail, memory_order_acquire);
+        r->cached_tail = atomic_load_explicit(&r->tail, SPSC_ACQUIRE);
         free_slots = cap - (head - r->cached_tail);
         if (n > free_slots) n = free_slots;
         if (n == 0) return 0;
@@ -86,7 +95,7 @@ static inline size_t spsc_push_n(spsc_ring *r, const void *src, size_t n) {
     const size_t es = r->elem_size;
     memcpy(r->buf + idx * es, src, first * es);
     if (n > first) memcpy(r->buf, (const unsigned char *)src + first * es, (n - first) * es);
-    atomic_store_explicit(&r->head, head + n, memory_order_release);
+    atomic_store_explicit(&r->head, head + n, SPSC_RELEASE);
     return n;
 }
 
@@ -99,7 +108,7 @@ static inline size_t spsc_pop_n(spsc_ring *r, void *dst, size_t n) {
     const size_t tail = atomic_load_explicit(&r->tail, memory_order_relaxed);
     size_t avail = r->cached_head - tail;
     if (avail < n) {
-        r->cached_head = atomic_load_explicit(&r->head, memory_order_acquire);
+        r->cached_head = atomic_load_explicit(&r->head, SPSC_ACQUIRE);
         avail = r->cached_head - tail;
         if (n > avail) n = avail;
         if (n == 0) return 0;
@@ -110,7 +119,7 @@ static inline size_t spsc_pop_n(spsc_ring *r, void *dst, size_t n) {
     const size_t es = r->elem_size;
     memcpy(dst, r->buf + idx * es, first * es);
     if (n > first) memcpy((unsigned char *)dst + first * es, r->buf, (n - first) * es);
-    atomic_store_explicit(&r->tail, tail + n, memory_order_release);
+    atomic_store_explicit(&r->tail, tail + n, SPSC_RELEASE);
     return n;
 }
 
@@ -121,7 +130,7 @@ static inline bool spsc_pop(spsc_ring *r, void *elem) { return spsc_pop_n(r, ele
 static inline const void *spsc_front(spsc_ring *r) {
     const size_t tail = atomic_load_explicit(&r->tail, memory_order_relaxed);
     if (r->cached_head == tail) {
-        r->cached_head = atomic_load_explicit(&r->head, memory_order_acquire);
+        r->cached_head = atomic_load_explicit(&r->head, SPSC_ACQUIRE);
         if (r->cached_head == tail) return NULL;
     }
     return r->buf + (tail & r->mask) * r->elem_size;
@@ -130,7 +139,7 @@ static inline const void *spsc_front(spsc_ring *r) {
 /* Drops one element previously observed through spsc_front. */
 static inline void spsc_consume(spsc_ring *r) {
     const size_t tail = atomic_load_explicit(&r->tail, memory_order_relaxed);
-    atomic_store_explicit(&r->tail, tail + 1, memory_order_release);
+    atomic_store_explicit(&r->tail, tail + 1, SPSC_RELEASE);
 }
 
 /* Approximate occupancy; exact only when both sides are quiescent. */
