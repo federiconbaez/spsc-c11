@@ -39,3 +39,5 @@ if(SPSC_SANITIZER STREQUAL "thread")
     PASS_REGULAR_EXPRESSION "WARNING: ThreadSanitizer: data race")
 endif()
 
+add_executable(bench_spsc bench/bench.c)
+target_link_libraries(bench_spsc PRIVATE spsc Threads::Threads)
